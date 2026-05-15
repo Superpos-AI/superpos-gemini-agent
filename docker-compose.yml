@@ -1,0 +1,16 @@
+services:
+  agent:
+    build:
+      # Build context is the parent directory so the Dockerfile can COPY in
+      # ../slim-agent-core/ alongside this repo's own files.
+      context: ..
+      dockerfile: Slim-Agent-Gemini/Dockerfile
+    image: slim-gemini-agent:local
+    env_file:
+      - .env
+    volumes:
+      - gemini_home:/home/agent/.gemini
+    restart: unless-stopped
+
+volumes:
+  gemini_home:

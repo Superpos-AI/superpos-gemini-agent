@@ -1,0 +1,7 @@
+# Local dev: install slim-agent-core in editable mode first:
+#   pip install -e ../slim-agent-core
+# Production (Docker): the Dockerfile copies and installs slim-agent-core
+# directly from the build context before installing this file.
+python-telegram-bot>=21.0
+httpx>=0.27.0
+pyyaml>=6.0

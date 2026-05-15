@@ -1,0 +1,26 @@
+services:
+  agent1:
+    build:
+      context: ..
+      dockerfile: Slim-Agent-Gemini/Dockerfile
+    image: slim-gemini-agent:local
+    env_file:
+      - .env.agent1
+    volumes:
+      - gemini_home_1:/home/agent/.gemini
+    restart: unless-stopped
+
+  agent2:
+    build:
+      context: ..
+      dockerfile: Slim-Agent-Gemini/Dockerfile
+    image: slim-gemini-agent:local
+    env_file:
+      - .env.agent2
+    volumes:
+      - gemini_home_2:/home/agent/.gemini
+    restart: unless-stopped
+
+volumes:
+  gemini_home_1:
+  gemini_home_2:
