@@ -17,11 +17,8 @@ RUN npm install -g @google/gemini-cli
 
 WORKDIR /app
 
-# Install the shared core library first (changes less often → better cache)
-COPY slim-agent-core/ /tmp/slim-agent-core/
-RUN pip install --no-cache-dir --break-system-packages /tmp/slim-agent-core && \
-    rm -rf /tmp/slim-agent-core
-
+# slim-agent-core is pulled directly from GitHub via requirements.txt
+# (the `git+https://…` line), so no parent-directory build context required.
 COPY requirements.txt .
 RUN pip install --no-cache-dir --break-system-packages -r requirements.txt
 

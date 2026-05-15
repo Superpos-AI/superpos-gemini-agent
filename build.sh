@@ -6,6 +6,6 @@ set -e
 
 cd "$(dirname "$0")"
 
-# docker-compose handles the parent-directory context that lets the Dockerfile
-# COPY ../slim-agent-core into the image.
+# slim-agent-core is fetched from GitHub during the pip install step,
+# so the build context is just this repo.
 docker compose build "$@"

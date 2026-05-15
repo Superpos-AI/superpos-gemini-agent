@@ -2,7 +2,7 @@
 
 Superpos slim agent backed by [Google's Gemini CLI](https://github.com/google-gemini/gemini-cli).
 
-Sister project to `Slim-Agent-Claude` and `Slim-Agent-Codex` — same architecture, same Superpos integration, same Telegram bot interface; just a different LLM executor.  All the shared runtime lives in [`slim-agent-core`](../slim-agent-core/); this repo is a thin shell that contributes:
+Sister project to `Slim-Agent-Claude` and `Slim-Agent-Codex` — same architecture, same Superpos integration, same Telegram bot interface; just a different LLM executor.  All the shared runtime lives in [`superpos-agent-core`](https://github.com/Superpos-AI/superpos-agent-core); this repo is a thin shell that contributes:
 
 - `GeminiExecutor` — wraps the `gemini` CLI as a subprocess and parses its JSONL events.
 - `GeminiConfig` — adds `gemini_*` and `google_api_key` env-var bindings on top of `BaseConfig`.
@@ -20,10 +20,14 @@ docker compose up --build
 ## Local dev
 
 ```bash
-pip install -e ../slim-agent-core
 pip install -e .
 python -m slim_agent_gemini
 ```
+
+If you're hacking on `slim-agent-core` in a sibling directory and want
+your changes picked up without re-pushing, uncomment the
+`[tool.uv.sources]` block in `pyproject.toml` (or `pip install -e
+../slim-agent-core` first).
 
 ## Status
 

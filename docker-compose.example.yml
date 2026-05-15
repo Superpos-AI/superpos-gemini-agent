@@ -1,8 +1,8 @@
 services:
   agent1:
     build:
-      context: ..
-      dockerfile: Slim-Agent-Gemini/Dockerfile
+      context: .
+      dockerfile: Dockerfile
     image: slim-gemini-agent:local
     env_file:
       - .env.agent1
@@ -12,8 +12,8 @@ services:
 
   agent2:
     build:
-      context: ..
-      dockerfile: Slim-Agent-Gemini/Dockerfile
+      context: .
+      dockerfile: Dockerfile
     image: slim-gemini-agent:local
     env_file:
       - .env.agent2
