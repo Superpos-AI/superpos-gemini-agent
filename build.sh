@@ -6,6 +6,6 @@ set -e
 
 cd "$(dirname "$0")"
 
-# slim-agent-core is fetched from GitHub during the pip install step,
+# superpos-agent-core is fetched from GitHub during the pip install step,
 # so the build context is just this repo.
 docker compose build "$@"

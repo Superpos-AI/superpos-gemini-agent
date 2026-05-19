@@ -17,7 +17,7 @@ RUN npm install -g @google/gemini-cli
 
 WORKDIR /app
 
-# slim-agent-core is pulled directly from GitHub via requirements.txt
+# superpos-agent-core is pulled directly from GitHub via requirements.txt
 # (the `git+https://…` line), so no parent-directory build context required.
 COPY requirements.txt .
 RUN pip install --no-cache-dir --break-system-packages -r requirements.txt

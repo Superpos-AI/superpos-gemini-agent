@@ -33,7 +33,7 @@ EOF
 fi
 
 # Run module setup (install deps, update GEMINI.md)
-python3 -m slim_agent_core.module_setup \
+python3 -m superpos_agent_core.module_setup \
     --modules-dir /workspace/.gemini/modules \
     --agents-md /workspace/GEMINI.md \
     || echo "Warning: module setup failed"

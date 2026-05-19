@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from slim_agent_core import run_agent
+from superpos_agent_core import run_agent
 
 from .config import GeminiConfig
 from .gemini_executor import GeminiExecutor

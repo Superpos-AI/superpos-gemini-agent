@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-from slim_agent_core import BaseConfig
+from superpos_agent_core import BaseConfig
 
 
 @dataclass

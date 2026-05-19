@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from slim_agent_core import RuntimeConfig
+from superpos_agent_core import RuntimeConfig
 
 
 class GeminiRuntimeConfig(RuntimeConfig):
