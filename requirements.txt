@@ -1,9 +1,9 @@
-# slim-agent-core is the shared runtime — pulled from GitHub so this repo
+# superpos-agent-core is the shared runtime — pulled from GitHub so this repo
 # can build standalone.  Pin to a specific commit/tag for reproducible
 # builds; @main is fine during active development.
-slim-agent-core @ git+https://github.com/Superpos-AI/superpos-agent-core.git@main
+superpos-agent-core @ git+https://github.com/Superpos-AI/superpos-agent-core.git@220a5baea000df80f0d2d3f9ab1946de8ba36cd0
 
-# Transitive deps of slim-agent-core are listed here for IDE/lockfile
+# Transitive deps of superpos-agent-core are listed here for IDE/lockfile
 # clarity even though pip would pull them in via core's own pyproject.toml.
 python-telegram-bot>=21.0
 httpx>=0.27.0
