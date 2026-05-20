@@ -480,6 +480,10 @@ class GeminiExecutor(Executor):
             inner_task = asyncio.create_task(
                 self._execute_inner(req, streamer, retries)
             )
+            # Register with the base class so the /stop Telegram command can
+            # find and cancel this in-flight work via cancel_chat(chat_id).
+            # Auto-untracks via done callback — no cleanup needed in finally.
+            self._track_chat_task(req.chat_id, inner_task)
             if req.source == "superpos" and req.superpos_task_id:
                 watcher_task = asyncio.create_task(_watch_claim_expiry())
             try:
