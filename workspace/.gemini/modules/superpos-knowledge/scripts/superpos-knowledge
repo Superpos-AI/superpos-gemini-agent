@@ -1,0 +1,181 @@
+#!/usr/bin/env python3
+"""CLI wrapper around superpos_agent_core.SuperposClient knowledge read methods.
+
+Subcommands mirror the client API:
+  search, get, list, graph, topics, decisions
+
+Prints JSON to stdout, errors to stderr.  Designed for the LLM to call
+via Bash and pipe through ``jq`` for follow-up queries.
+
+Read-only.  Writes happen via the ``knowledge_fillin`` task type, not here.
+"""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+import os
+import sys
+from typing import Any
+
+# `superpos_agent_core` is pip-installed via the container's requirements.txt.
+from superpos_agent_core import BaseConfig, SuperposClient
+
+
+def _config_from_env() -> BaseConfig:
+    base_url = os.environ.get("SUPERPOS_BASE_URL", "").rstrip("/")
+    hive_id = os.environ.get("SUPERPOS_HIVE_ID", "")
+    agent_id = os.environ.get("SUPERPOS_AGENT_ID", "")
+    token = os.environ.get("SUPERPOS_API_TOKEN", "")
+    refresh = os.environ.get("SUPERPOS_REFRESH_TOKEN", "")
+
+    if not (base_url and hive_id and token):
+        print(
+            "Error: SUPERPOS_BASE_URL, SUPERPOS_HIVE_ID, and "
+            "SUPERPOS_API_TOKEN must be set in the environment.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    return BaseConfig(
+        superpos_base_url=base_url,
+        superpos_hive_id=hive_id,
+        superpos_agent_id=agent_id,
+        superpos_api_token=token,
+        superpos_refresh_token=refresh,
+    )
+
+
+def _print(value: Any) -> None:
+    """Print a JSON-serialisable value, indented for human reading."""
+    print(json.dumps(value, indent=2, default=str))
+
+
+async def _run(args: argparse.Namespace) -> int:
+    config = _config_from_env()
+    client = SuperposClient(config)
+    try:
+        if args.cmd == "search":
+            try:
+                out = await client.search_knowledge(
+                    q=args.query,
+                    scope=args.scope,
+                    semantic=args.semantic,
+                    limit=args.limit,
+                )
+            except ValueError as e:
+                print(f"Error: {e}", file=sys.stderr)
+                return 2
+            _print(out)
+
+        elif args.cmd == "get":
+            _print(await client.get_knowledge(args.entry_id))
+
+        elif args.cmd == "list":
+            _print(await client.list_knowledge(
+                key=args.key,
+                scope=args.scope,
+                tags=args.tags,
+                stale_days=args.stale_days,
+                sort=args.sort,
+                limit=args.limit,
+            ))
+
+        elif args.cmd == "graph":
+            _print(await client.get_knowledge_graph(
+                args.entry_id,
+                depth=args.depth,
+                max_nodes=args.max_nodes,
+                link_types=args.link_types,
+            ))
+
+        elif args.cmd == "topics":
+            _print(await client.knowledge_topics())
+
+        elif args.cmd == "decisions":
+            _print(await client.knowledge_decisions())
+
+        else:
+            print(f"Unknown subcommand: {args.cmd}", file=sys.stderr)
+            return 2
+
+        return 0
+    finally:
+        await client.close()
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="superpos-knowledge",
+        description=(
+            "Read the Superpos knowledge store: FTS/semantic search, list, "
+            "get, graph traversal, topic & decision indexes."
+        ),
+    )
+    sub = parser.add_subparsers(dest="cmd", required=True)
+
+    # search
+    p_search = sub.add_parser("search", help="Full-text or semantic search")
+    p_search.add_argument("query", nargs="?", help="Search query string")
+    p_search.add_argument("--scope", help="Restrict to a scope (hive, apiary, agent:<id>)")
+    p_search.add_argument(
+        "--semantic", action="store_true",
+        help="Use pgvector cosine-similarity (embedding-backed) instead of Postgres FTS",
+    )
+    p_search.add_argument("--limit", type=int, default=10, help="Top-N results (default 10)")
+
+    # get
+    p_get = sub.add_parser("get", help="Fetch a single entry by ID")
+    p_get.add_argument("entry_id", help="Knowledge entry ULID")
+
+    # list
+    p_list = sub.add_parser("list", help="Browse entries with filters")
+    p_list.add_argument("--key", help="Key pattern (* wildcard)")
+    p_list.add_argument("--scope", help="Restrict to a scope")
+    p_list.add_argument("--tags", help="Comma-separated tags (all must match)")
+    p_list.add_argument("--stale-days", type=int, help="Entries not read in N days")
+    p_list.add_argument(
+        "--sort",
+        choices=["least-read"],
+        help="Sort order — currently only least-read is supported server-side",
+    )
+    p_list.add_argument("--limit", type=int, default=50, help="Default 50, server cap 100")
+
+    # graph
+    p_graph = sub.add_parser("graph", help="BFS link traversal from an entry")
+    p_graph.add_argument("entry_id", help="Knowledge entry ULID to start from")
+    p_graph.add_argument("--depth", type=int, default=2, help="Hops to traverse (server clamps 1-5)")
+    p_graph.add_argument(
+        "--max-nodes", type=int, default=50,
+        help="Max nodes returned (server clamps 1-200)",
+    )
+    p_graph.add_argument(
+        "--link-types",
+        help="Comma-separated link-type allowlist (e.g. 'decides,depends_on')",
+    )
+
+    # topics / decisions
+    sub.add_parser("topics", help="Convenience index of topic clusters in this hive")
+    sub.add_parser("decisions", help="Convenience index of recorded decisions")
+
+    return parser
+
+
+def _normalise_sort(value: str | None) -> str | None:
+    """Map the user-friendly ``--sort least-read`` to the server's
+    ``least_read`` parameter (the underscore variant the controller
+    expects)."""
+    if value == "least-read":
+        return "least_read"
+    return value
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _build_parser().parse_args(argv)
+    args.sort = _normalise_sort(getattr(args, "sort", None))
+    return asyncio.run(_run(args))
+
+
+if __name__ == "__main__":
+    sys.exit(main())

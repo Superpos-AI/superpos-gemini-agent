@@ -1,0 +1,10 @@
+description: "Read and query the Superpos knowledge store — FTS / semantic search, list, get, graph traversal, topic & decision indexes"
+env:
+  - SUPERPOS_BASE_URL
+  - SUPERPOS_HIVE_ID
+  - SUPERPOS_AGENT_ID
+  - SUPERPOS_API_TOKEN
+  - SUPERPOS_REFRESH_TOKEN
+deps:
+  python: []
+  system: []
