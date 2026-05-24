@@ -32,10 +32,20 @@ EOF
     echo "[entrypoint] Wrote $HOME/.gemini/auth.json from GEMINI_API_KEY env" >&2
 fi
 
-# Run module setup (install deps, update GEMINI.md)
+# Run module setup: install deps, symlink scripts onto PATH, update GEMINI.md.
+# --bin-dir links scripts from both workspace and core-bundled modules,
+# so platform tools (e.g. superpos-issues) work even when nothing is in
+# /workspace/.gemini/modules.
+#
+# If this fails (network blip on `pip install`, broken module, etc.) the
+# container still starts — the Dockerfile pre-populated modules-bin with
+# build-time symlinks to workspace scripts, so those stay callable from
+# PATH.  Only core-bundled tools (added at runtime) are lost in that
+# degraded mode.
 python3 -m superpos_agent_core.module_setup \
     --modules-dir /workspace/.gemini/modules \
     --agents-md /workspace/GEMINI.md \
-    || echo "Warning: module setup failed"
+    --bin-dir /workspace/.gemini/modules-bin \
+    || echo "Warning: module setup failed (build-time workspace symlinks remain in place)"
 
 exec "$@"
