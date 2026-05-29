@@ -17,15 +17,28 @@ cp .env.example .env
 docker compose up --build
 ```
 
-### Authenticating agy
+### Authenticating agy (one-time)
 
-`agy` uses Google OAuth — no API-key env var. After the container is up, run the one-time browser-based login:
+`agy` uses Google OAuth — no API-key env var. Run a one-shot login before bringing the agent up (matches the `superpos-claude-agent` pattern of `docker run -it --entrypoint claude ...`):
 
 ```bash
-docker compose run --rm -it --entrypoint agy gemini --prompt-interactive 'hi'
+docker run -it --rm --network=host \
+  -v agy_auth:/home/agent/.gemini \
+  --entrypoint agy slim-gemini-agent:local
 ```
 
-Follow the printed URL, sign in with a Google account that has Antigravity access. The OAuth token is written to `~/.gemini/antigravity-cli/antigravity-oauth-token` inside the container, which the compose volume bind-mounts to the host so it persists across restarts. Once you've completed this once, restart the agent normally — preflight will detect the token and the agent will start.
+Two important flags:
+
+* `--network=host` — agy's OAuth token-exchange step tries IPv6 first, and Docker bridges typically don't have IPv6 routing. Host networking sidesteps that (only needed for the login step; the running agent works fine on bridge).
+* `-v agy_auth:/home/agent/.gemini` — persists the OAuth token in a named volume. The agent's compose file should mount the same volume.
+
+agy will print a URL like `https://accounts.google.com/o/oauth2/auth?...`. Open it in your browser, sign in with a Google account that has Antigravity access, copy the `code=` parameter from the callback URL, paste it back into the terminal. Once it confirms "Signing in…", you can `Ctrl+C` to exit. The OAuth token persists under `~/.gemini/antigravity-cli/antigravity-oauth-token` in the volume and will be reused by `agy --print` invocations until the refresh token expires (typically weeks).
+
+### Running
+
+```bash
+docker compose up --build
+```
 
 ## Local dev
 
@@ -45,9 +58,10 @@ This repo previously installed `@google/gemini-cli` from npm and parsed its JSON
 
 Trade-offs of the switch:
 
-- **No API-key env var.** `agy` is OAuth-only — see "Authenticating agy" above for the one-time setup.
+- **No API-key env var.** `agy` is OAuth-only — see "Authenticating agy (one-time)" above. Operationally this means one interactive step before first run; subsequent runs are headless.
 - **No `--model` flag.** Model selection is internal to `agy`. The `GeminiRuntimeConfig.KNOWN_MODELS` list stays for `/model list` parity but `agy` ignores it.
 - **No tool-use notifications on stdout.** `agy --print` emits the final response as plain text; tool activity is logged to `~/.gemini/antigravity-cli/cli.log` instead. The Telegram streamer no longer emits "🔧 calling tool …" lines per tool call (it still streams the response text in chunks).
+- **No `--dangerously-skip-permissions`.** Listed in `agy --help` but as of agy 1.0.3 its argparse is broken — the flag consumes the next positional as its value, eating the prompt. Unnecessary anyway: in `--print` mode there is no interactive UI to challenge tool calls, so tools execute without blocking.
 
 If you need the older `@google/gemini-cli`-based image for a specific reason, check out the previous tag before this swap.
 

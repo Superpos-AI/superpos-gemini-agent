@@ -8,11 +8,14 @@ This executor wraps the ``agy`` command from Google's Antigravity CLI
 a static native Go binary, no node runtime). Key assumptions (verify
 against ``agy --help`` if anything breaks):
 
-* ``agy --print --dangerously-skip-permissions "<prompt>"`` runs the
-  prompt non-interactively and prints the response as plain text to
-  stdout. ``--print`` (alias: ``-p``) is the non-interactive entry;
-  ``--dangerously-skip-permissions`` auto-approves tool calls so the
-  agent never blocks on a confirmation prompt.
+* ``agy --print "<prompt>"`` runs the prompt non-interactively and
+  prints the response as plain text to stdout. ``--print`` (alias:
+  ``-p``) is the non-interactive entry; in print mode there is no
+  UI to challenge tool permission requests, so tools execute without
+  blocking — no equivalent of gemini-cli's ``--yolo`` needed.
+  (``agy --help`` lists ``--dangerously-skip-permissions`` but as of
+  agy 1.0.3 its argparse is broken — the flag consumes the next
+  positional as its value, eating the prompt. Don't pass it.)
 * ``agy`` does NOT support a ``--model`` flag — model selection happens
   inside the CLI based on Antigravity's current default (gemini-3.0+).
   The ``model``/``effort`` runtime knobs on :class:`GeminiRuntimeConfig`
@@ -282,7 +285,7 @@ class GeminiExecutor(Executor):
         try:
             env = {**os.environ}
             process = await asyncio.create_subprocess_exec(
-                "agy", "--print", "--dangerously-skip-permissions", "hi",
+                "agy", "--print", "hi",
                 stdout=PIPE,
                 stderr=PIPE,
                 env=env,
@@ -706,14 +709,25 @@ class GeminiExecutor(Executor):
         if system_prompt_append:
             full_prompt = f"{system_prompt_append}\n\n---\n\n{prompt}"
 
-        # ``agy`` has no --output-format / --model / -c knobs in print
-        # mode — model and reasoning effort are baked into the CLI's
-        # current default. The runtime knobs on GeminiRuntimeConfig are
-        # accepted for /model command parity but the CLI ignores them.
+        # ``agy --print`` runs the prompt autonomously and prints the
+        # response. It has no --output-format / --model / -c knobs in
+        # print mode — model and reasoning effort are baked into the
+        # CLI's current default. The runtime knobs on
+        # GeminiRuntimeConfig are accepted for /model command parity
+        # but the CLI ignores them.
+        #
+        # We do NOT pass --dangerously-skip-permissions even though
+        # agy --help lists it: as of agy 1.0.3 the flag's argparse
+        # signature is wrong and it consumes the next positional
+        # (i.e. the prompt) as its value, leaving no prompt at all.
+        # In --print mode the flag is also unnecessary — there's no
+        # interactive UI to prompt for permission, so tools execute
+        # without a human-loop block. Verified empirically:
+        # `agy --print "ls /tmp and tell me what you see"` returns
+        # the listing without any permission challenge.
         cmd = [
             "agy",
             "--print",
-            "--dangerously-skip-permissions",
             full_prompt,
         ]
         return cmd
