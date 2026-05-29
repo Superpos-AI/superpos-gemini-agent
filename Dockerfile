@@ -12,8 +12,18 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     apt-get update && apt-get install -y --no-install-recommends gh && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Google's Gemini CLI from npm
-RUN npm install -g @google/gemini-cli
+# Install Google's Antigravity CLI (`agy`).
+#
+# Why `agy` rather than `@google/gemini-cli` (the npm wrapper this image
+# used to install): `agy` is Google's current first-party CLI for the
+# Gemini-3 family, ships a static native Go binary (no node runtime
+# needed at run-time), is dramatically faster cold-start, and exposes
+# the same Gemini models without intermittent npx/npm-resolution races.
+# The upstream installer is vendored to `install-agy.sh` in the repo
+# root because `antigravity.google` requires IPv6, which most Docker
+# bridges don't have — but the binary CDN it downloads from is IPv4-OK.
+COPY install-agy.sh /tmp/install-agy.sh
+RUN bash /tmp/install-agy.sh -d /usr/local/bin && rm /tmp/install-agy.sh
 
 WORKDIR /app
 
@@ -45,7 +55,12 @@ RUN useradd -m -s /bin/bash -u 1001 agent && \
     mkdir -p /home/agent/.gemini && \
     chown -R agent:agent /workspace /home/agent/.gemini
 
-ENV PYTHONPATH="/app"
+# Module is nested at /app/src/slim_agent_gemini/; PYTHONPATH must include
+# /app/src so that `python3 -m slim_agent_gemini` (the CMD below) resolves
+# the package. (Sister claude/codex agents put their code directly under
+# src/ so /app works for them; this repo's pyproject.toml-style nesting
+# needs /app/src.)
+ENV PYTHONPATH="/app/src"
 ENV PYTHONUNBUFFERED=1
 ENV HOME="/home/agent"
 
