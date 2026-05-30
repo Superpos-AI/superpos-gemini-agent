@@ -23,14 +23,14 @@ docker compose up --build
 
 ```bash
 docker run -it --rm --network=host \
-  -v agy_auth:/home/agent/.gemini \
+  -v gemini_home:/home/agent/.gemini \
   --entrypoint agy slim-gemini-agent:local
 ```
 
 Two important flags:
 
 * `--network=host` — agy's OAuth token-exchange step tries IPv6 first, and Docker bridges typically don't have IPv6 routing. Host networking sidesteps that (only needed for the login step; the running agent works fine on bridge).
-* `-v agy_auth:/home/agent/.gemini` — persists the OAuth token in a named volume. The agent's compose file should mount the same volume.
+* `-v gemini_home:/home/agent/.gemini` — persists the OAuth token in the same named volume that `docker-compose.yml` mounts into the running agent, so the next `docker compose up` is already authenticated. If you use `docker-compose.example.yml` (per-instance volumes `gemini_home_1`, `gemini_home_2`, …), repeat the login once per volume.
 
 agy will print a URL like `https://accounts.google.com/o/oauth2/auth?...`. Open it in your browser, sign in with a Google account that has Antigravity access, copy the `code=` parameter from the callback URL, paste it back into the terminal. Once it confirms "Signing in…", you can `Ctrl+C` to exit. The OAuth token persists under `~/.gemini/antigravity-cli/antigravity-oauth-token` in the volume and will be reused by `agy --print` invocations until the refresh token expires (typically weeks).
 

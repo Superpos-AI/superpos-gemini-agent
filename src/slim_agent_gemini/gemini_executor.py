@@ -27,8 +27,8 @@ against ``agy --help`` if anything breaks):
 * MCP server config lives at ``~/.gemini/antigravity-cli/mcp_config.json``
   under the ``mcpServers`` key (same schema as gemini-cli, different path).
 * Authentication is OAuth-based — the user must complete an interactive
-  ``agy --prompt-interactive 'hi'`` login once. The resulting OAuth
-  token persists under ``~/.gemini/antigravity-cli/`` which is
+  ``agy`` login once (see README "Authenticating agy"). The resulting
+  OAuth token persists under ``~/.gemini/antigravity-cli/`` which is
   bind-mounted out of the container so it survives restarts. There is
   NO ``GEMINI_API_KEY``-style env var auth mode for ``agy``.
 
@@ -1105,7 +1105,7 @@ _AUTH_HELP_INVALID_KEY = """
 ║  agy uses Google OAuth (no API-key env var). One-time setup: ║
 ║                                                              ║
 ║    docker compose run --rm -it \\                             ║
-║      --entrypoint agy gemini --prompt-interactive 'hi'       ║
+║      --network=host --entrypoint agy agent                   ║
 ║                                                              ║
 ║  Follow the URL it prints to sign in with the Google         ║
 ║  account that has Antigravity access. The OAuth token is     ║
