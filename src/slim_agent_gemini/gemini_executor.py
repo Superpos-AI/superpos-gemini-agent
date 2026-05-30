@@ -1104,8 +1104,8 @@ _AUTH_HELP_INVALID_KEY = """
 ║                                                              ║
 ║  agy uses Google OAuth (no API-key env var). One-time setup: ║
 ║                                                              ║
-║    docker compose run --rm -it \\                             ║
-║      --network=host --entrypoint agy agent                   ║
+║    docker compose run --rm -it --network=host \\              ║
+║      --entrypoint sh agent -c 'agy'                          ║
 ║                                                              ║
 ║  Follow the URL it prints to sign in with the Google         ║
 ║  account that has Antigravity access. The OAuth token is     ║

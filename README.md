@@ -24,8 +24,10 @@ docker compose up --build
 ```bash
 docker run -it --rm --network=host \
   -v gemini_home:/home/agent/.gemini \
-  --entrypoint agy slim-gemini-agent:local
+  --entrypoint sh slim-gemini-agent:local -c 'agy'
 ```
+
+`--entrypoint` only overrides ENTRYPOINT; the image's default CMD (`python3 -m slim_agent_gemini`) would otherwise be appended as positional args to `agy`. Routing through `sh -c 'agy'` runs bare `agy` (which drops into the interactive TUI + triggers OAuth) cleanly, with no leftover args.
 
 Two important flags:
 
