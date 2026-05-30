@@ -1,19 +1,36 @@
-"""Queue-based worker that invokes Google's Gemini CLI and routes output.
+"""Queue-based worker that invokes Google's Antigravity (`agy`) CLI and
+routes output.
 
 CLI integration notes
 ---------------------
-This executor wraps the ``gemini`` command from ``@google/gemini-cli``.  Key
-assumptions (verify against ``gemini --help`` if anything breaks):
+This executor wraps the ``agy`` command from Google's Antigravity CLI
+(installed in the Docker image via the vendored ``install-agy.sh`` —
+a static native Go binary, no node runtime). Key assumptions (verify
+against ``agy --help`` if anything breaks):
 
-* ``gemini --output-format json --yolo "<prompt>"`` runs non-interactively and
-  emits JSON events to stdout.  ``--yolo`` auto-approves tool calls so the
-  agent never blocks on a confirmation prompt; ``--output-format json``
-  switches stdout from human-formatted prose to structured JSONL.
-* ``--model <id>`` selects the model (e.g. ``gemini-2.5-pro``).
-* The CLI reads MCP server configuration from ``~/.gemini/settings.json``
-  under the ``mcpServers`` key.
-* The CLI honours a top-level ``GEMINI.md`` in the working directory as a
-  system-prompt overlay (analogous to Codex's ``AGENTS.md``).
+* ``agy --print "<prompt>"`` runs the prompt non-interactively and
+  prints the response as plain text to stdout. ``--print`` (alias:
+  ``-p``) is the non-interactive entry; in print mode there is no
+  UI to challenge tool permission requests, so tools execute without
+  blocking — no equivalent of gemini-cli's ``--yolo`` needed.
+  (``agy --help`` lists ``--dangerously-skip-permissions`` but as of
+  agy 1.0.3 its argparse is broken — the flag consumes the next
+  positional as its value, eating the prompt. Don't pass it.)
+* ``agy`` does NOT support a ``--model`` flag — model selection happens
+  inside the CLI based on Antigravity's current default (gemini-3.0+).
+  The ``model``/``effort`` runtime knobs on :class:`GeminiRuntimeConfig`
+  are kept for ``/model``-command compatibility but the CLI ignores them.
+* Output is plain text (NOT JSONL like ``@google/gemini-cli`` used to
+  emit). We stream stdout directly to the Telegram streamer without
+  parsing — there are no tool-use events on stdout in ``--print`` mode
+  (agy logs tool activity to ``~/.gemini/antigravity-cli/cli.log``).
+* MCP server config lives at ``~/.gemini/antigravity-cli/mcp_config.json``
+  under the ``mcpServers`` key (same schema as gemini-cli, different path).
+* Authentication is OAuth-based — the user must complete an interactive
+  ``agy`` login once (see README "Authenticating agy"). The resulting
+  OAuth token persists under ``~/.gemini/antigravity-cli/`` which is
+  bind-mounted out of the container so it survives restarts. There is
+  NO ``GEMINI_API_KEY``-style env var auth mode for ``agy``.
 
 Session resume
 --------------
@@ -90,8 +107,15 @@ class _HistoryTurn:
 
 
 def _write_mcp_settings(home_dir: str, mcp_servers: dict) -> None:
-    """Write Gemini's MCP server configuration to ``{home_dir}/settings.json``."""
-    settings_path = Path(home_dir) / "settings.json"
+    """Write the agy MCP server configuration.
+
+    ``agy`` looks for MCP servers in ``~/.gemini/antigravity-cli/mcp_config.json``
+    under the same ``mcpServers`` schema that ``@google/gemini-cli`` used.
+    The path differs from gemini-cli's ``~/.gemini/settings.json`` — agy's
+    own settings.json (colour scheme, trusted workspaces, etc.) is a
+    separate file and is not the MCP config sink.
+    """
+    settings_path = Path(home_dir) / "antigravity-cli" / "mcp_config.json"
     settings_path.parent.mkdir(parents=True, exist_ok=True)
     existing: dict = {}
     if settings_path.exists():
@@ -256,12 +280,12 @@ class GeminiExecutor(Executor):
     # ── Preflight ─────────────────────────────────────────────────────
 
     async def preflight(self) -> None:
-        """Verify Gemini CLI is installed and credentials work."""
-        log.info("Verifying Gemini authentication...")
+        """Verify agy CLI is installed and OAuth credentials work."""
+        log.info("Verifying agy authentication...")
         try:
             env = {**os.environ}
             process = await asyncio.create_subprocess_exec(
-                "gemini", "--output-format", "json", "--yolo", "hi",
+                "agy", "--print", "hi",
                 stdout=PIPE,
                 stderr=PIPE,
                 env=env,
@@ -273,22 +297,23 @@ class GeminiExecutor(Executor):
                 stderr_str = stderr.decode(errors="replace")
                 lower = stderr_str.lower()
                 if any(s in lower for s in (
-                    "authentication", "invalid api key", "unauthorized",
-                    "permission denied", "not authenticated",
+                    "authentication", "unauthorized", "permission denied",
+                    "not authenticated", "login", "sign in", "oauth",
                 )):
                     print(_AUTH_HELP_INVALID_KEY, file=sys.stderr)
                     sys.exit(1)
                 raise RuntimeError(
-                    f"Gemini auth check failed (exit {process.returncode}): "
+                    f"agy auth check failed (exit {process.returncode}): "
                     f"{stderr_str[:500]}"
                 )
-            log.info("Gemini authentication OK")
+            log.info("agy authentication OK")
         except asyncio.TimeoutError:
-            log.warning("Gemini auth check timed out (60s) — proceeding anyway")
+            log.warning("agy auth check timed out (60s) — proceeding anyway")
         except FileNotFoundError:
             log.critical(
-                "'gemini' CLI not found on PATH. "
-                "Install with: npm install -g @google/gemini-cli"
+                "'agy' CLI not found on PATH. "
+                "Install via the vendored installer: "
+                "bash install-agy.sh -d /usr/local/bin"
             )
             sys.exit(1)
 
@@ -557,18 +582,14 @@ class GeminiExecutor(Executor):
             )
 
             try:
-                dedup = _EventDeduplicator()
-                async for line in process.stdout:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        event = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-                    text = dedup.extract_text(event)
-                    if text:
-                        full_text += text
+                # ``agy --print`` emits plain text on stdout (NOT JSONL like
+                # gemini-cli used to). Stream chunks straight into the
+                # accumulator — no event parsing or dedup needed.
+                while True:
+                    chunk = await process.stdout.read(4096)
+                    if not chunk:
+                        break
+                    full_text += chunk.decode(errors="replace")
                 await process.wait()
             finally:
                 if process.returncode is None:
@@ -664,10 +685,11 @@ class GeminiExecutor(Executor):
 
     def _build_env(self) -> dict[str, str]:
         env = {**os.environ}
-        if self._config.google_api_key:
-            # Gemini CLI accepts GEMINI_API_KEY; some versions also read GOOGLE_API_KEY.
-            env.setdefault("GEMINI_API_KEY", self._config.google_api_key)
-            env.setdefault("GOOGLE_API_KEY", self._config.google_api_key)
+        # `agy` uses OAuth (token persisted under ~/.gemini/antigravity-cli/);
+        # there is no API-key env-var auth mode. ``google_api_key`` on
+        # :class:`GeminiConfig` is therefore unused by the CLI — kept on the
+        # dataclass only so existing operators with the env var set don't get
+        # a missing-attribute error during config load.
         return env
 
     def _build_gemini_command(
@@ -676,24 +698,38 @@ class GeminiExecutor(Executor):
         cwd: str | None = None,
         system_prompt_append: str | None = None,
     ) -> list[str]:
-        """Build the gemini CLI command list."""
+        """Build the agy CLI command list.
+
+        Name kept as ``_build_gemini_command`` for backwards compatibility
+        with anything that patched / overrode it — semantically still
+        "build the command that drives a Gemini model", just via the agy
+        binary instead of the deprecated gemini-cli npm wrapper.
+        """
         full_prompt = prompt
         if system_prompt_append:
             full_prompt = f"{system_prompt_append}\n\n---\n\n{prompt}"
 
+        # ``agy --print`` runs the prompt autonomously and prints the
+        # response. It has no --output-format / --model / -c knobs in
+        # print mode — model and reasoning effort are baked into the
+        # CLI's current default. The runtime knobs on
+        # GeminiRuntimeConfig are accepted for /model command parity
+        # but the CLI ignores them.
+        #
+        # We do NOT pass --dangerously-skip-permissions even though
+        # agy --help lists it: as of agy 1.0.3 the flag's argparse
+        # signature is wrong and it consumes the next positional
+        # (i.e. the prompt) as its value, leaving no prompt at all.
+        # In --print mode the flag is also unnecessary — there's no
+        # interactive UI to prompt for permission, so tools execute
+        # without a human-loop block. Verified empirically:
+        # `agy --print "ls /tmp and tell me what you see"` returns
+        # the listing without any permission challenge.
         cmd = [
-            "gemini",
-            "--output-format", "json",
-            "--yolo",  # auto-accept tool calls; non-interactive
+            "agy",
+            "--print",
+            full_prompt,
         ]
-        if self._runtime.model:
-            cmd.extend(["--model", self._runtime.model])
-        # Gemini exposes reasoning depth via a config knob; pass it through
-        # the prompt preamble if the CLI doesn't accept a flag directly.
-        # (Newer CLI versions accept `-c thinking_budget=...`; older ones don't.)
-        if self._runtime.effort:
-            cmd.extend(["-c", f"thinking_effort={self._runtime.effort}"])
-        cmd.append(full_prompt)
         return cmd
 
     async def _execute_inner(
@@ -793,35 +829,25 @@ class GeminiExecutor(Executor):
                 stderr_chunks: list[bytes] = []
                 json_errors: list[str] = []
 
-                log.debug("Running gemini command: %s (cwd=%s)", cmd, effective_cwd)
+                log.debug("Running agy command: %s (cwd=%s)", cmd, effective_cwd)
 
                 async def _drain_stdout():
                     nonlocal full_text
-                    dedup = _EventDeduplicator()
-                    async for line in process.stdout:
-                        line = line.strip()
-                        if not line:
-                            continue
-                        try:
-                            event = json.loads(line)
-                        except json.JSONDecodeError:
-                            log.debug("Non-JSON line from gemini: %s", line[:200])
-                            continue
-
-                        if event.get("type") == "error":
-                            json_errors.append(event.get("message", ""))
-                        err_info = event.get("error")
-                        if isinstance(err_info, dict):
-                            json_errors.append(err_info.get("message", ""))
-
-                        text = dedup.extract_text(event)
-                        if text:
-                            full_text += text
-                            await streamer.append(text)
-
-                        tool_info = dedup.extract_tool_use(event)
-                        if tool_info:
-                            await streamer.send_tool_notification(*tool_info)
+                    # ``agy --print`` streams plain text on stdout. Forward
+                    # chunks straight to the Telegram streamer — no JSON-
+                    # event parsing, no dedup, and no tool-use extraction
+                    # (agy logs tool activity to its own log file under
+                    # ~/.gemini/antigravity-cli/, not to stdout in --print
+                    # mode). The chunked read here keeps per-token latency
+                    # roughly the same as iterating by line did for
+                    # gemini-cli's JSONL output.
+                    while True:
+                        chunk = await process.stdout.read(4096)
+                        if not chunk:
+                            break
+                        text = chunk.decode(errors="replace")
+                        full_text += text
+                        await streamer.append(text)
 
                 drain_task = asyncio.create_task(_drain_stdout())
                 wait_task = asyncio.create_task(process.wait())
@@ -874,7 +900,7 @@ class GeminiExecutor(Executor):
                     stderr_str = " | ".join(filter(None, json_errors))
 
                 if process.returncode != 0:
-                    raise _GeminiProcessError(process.returncode, stderr_str)
+                    raise _AgyProcessError(process.returncode, stderr_str)
 
                 await streamer.finish()
 
@@ -913,7 +939,7 @@ class GeminiExecutor(Executor):
                     )
                 return
 
-            except _GeminiProcessError as e:
+            except _AgyProcessError as e:
                 err_str = str(e)
                 lower = err_str.lower()
                 is_rate_limit = (
@@ -1048,164 +1074,45 @@ class GeminiExecutor(Executor):
                 return
 
 
-# ─────────────────────────────────────────────────────────────────────
-#  Event parsing & deduplication for Gemini CLI's JSONL output
-# ─────────────────────────────────────────────────────────────────────
+# _EventDeduplicator was previously used to parse the JSONL stream emitted
+# by ``@google/gemini-cli`` (streaming deltas + completed message events
+# overlapped, so we deduplicated). ``agy --print`` emits plain text on
+# stdout instead — no events, nothing to dedup. The drain functions
+# above just append raw chunks to the streamer, so this class is no
+# longer referenced. Removed in the gemini→agy vendor swap.
 
 
-class _EventDeduplicator:
-    """Filters duplicate text and tool events from Gemini's JSONL stream.
-
-    Like every modern assistant CLI, Gemini emits overlapping events: streaming
-    deltas AND a completed message summary containing the same text.  This
-    class prefers deltas (lower latency) and skips the trailing duplicates.
-
-    The exact event shape is still moving with Gemini CLI's versions; this
-    extractor handles the patterns we've seen and falls back to ignoring
-    unknown events.
-    """
-
-    def __init__(self) -> None:
-        self._saw_delta = False
-        self._seen_tool_keys: set[str] = set()
-
-    def extract_text(self, event: dict) -> str:
-        etype = event.get("type", "")
-
-        if etype in ("response.created", "response.started", "turn.started"):
-            self._saw_delta = False
-            return ""
-
-        # Streaming deltas — lowest latency, prefer these
-        if etype in (
-            "response.output_text.delta",
-            "content_block_delta",
-            "text_delta",
-        ):
-            self._saw_delta = True
-            return event.get("delta", event.get("text", ""))
-
-        if etype == "text" and "text" in event:
-            self._saw_delta = True
-            return event["text"]
-
-        # Completed assistant message — only use if no deltas were seen
-        if etype == "message" and event.get("role") == "assistant":
-            if self._saw_delta:
-                return ""
-            parts = []
-            for block in event.get("content", []):
-                if isinstance(block, dict) and block.get("type") in (
-                    "output_text", "text",
-                ):
-                    parts.append(block.get("text", ""))
-                elif isinstance(block, str):
-                    parts.append(block)
-            return "".join(parts)
-
-        # Gemini CLI's "agent_message" shape (mirrors Codex CLI naming)
-        if etype == "item.completed":
-            if self._saw_delta:
-                return ""
-            item = event.get("item", {})
-            if isinstance(item, dict) and item.get("type") == "agent_message":
-                return item.get("text", "")
-
-        return ""
-
-    def extract_tool_use(self, event: dict) -> tuple[str, object] | None:
-        etype = event.get("type", "")
-
-        name: str | None = None
-        args: object = {}
-        call_id = ""
-
-        if etype in ("function_call", "tool_call", "tool_use"):
-            name = event.get("name", event.get("function", {}).get("name", "unknown"))
-            args = event.get(
-                "input",
-                event.get(
-                    "arguments",
-                    event.get("function", {}).get("arguments", {}),
-                ),
-            )
-            call_id = event.get("call_id", event.get("id", ""))
-        elif etype == "item.started":
-            item = event.get("item", {})
-            if isinstance(item, dict) and item.get("type") in (
-                "function_call",
-                "tool_call",
-                "tool_use",
-            ):
-                name = item.get("name", "unknown")
-                args = item.get("input", item.get("arguments", {}))
-                call_id = item.get("call_id", item.get("id", ""))
-            elif isinstance(item, dict) and item.get("type") == "command_execution":
-                cmd = item.get("command", "")
-                if cmd.startswith("/bin/bash -lc '") and cmd.endswith("'"):
-                    cmd = cmd[15:-1]
-                elif cmd.startswith("/bin/bash -lc "):
-                    cmd = cmd[14:]
-                name = "run_shell_command"
-                args = {"command": cmd}
-                call_id = item.get("call_id", item.get("id", ""))
-            else:
-                return None
-        else:
-            return None
-
-        if name is None:
-            return None
-
-        if isinstance(args, str):
-            try:
-                args = json.loads(args)
-            except json.JSONDecodeError:
-                args = {"raw": args}
-
-        if call_id:
-            dedup_key = f"id:{call_id}"
-        else:
-            args_str = str(args)[:200]
-            dedup_key = f"na:{name}:{args_str}"
-
-        if dedup_key in self._seen_tool_keys:
-            return None
-        self._seen_tool_keys.add(dedup_key)
-
-        return (name, args)
-
-
-class _GeminiProcessError(Exception):
-    """Raised when the gemini subprocess exits with non-zero status."""
+class _AgyProcessError(Exception):
+    """Raised when the agy subprocess exits with non-zero status."""
 
     def __init__(self, returncode: int, stderr: str) -> None:
         self.returncode = returncode
         self.stderr = stderr
         super().__init__(
-            f"gemini process exited with code {returncode}: {stderr[:500]}"
+            f"agy process exited with code {returncode}: {stderr[:500]}"
         )
 
 
 # Auth help message printed when preflight detects bad credentials.
+# ``agy`` uses Google OAuth exclusively — there is no API-key fallback.
+# The token persists under ~/.gemini/antigravity-cli/ which the compose
+# file bind-mounts out of the container so this is a one-time setup.
 _AUTH_HELP_INVALID_KEY = """
 ╔══════════════════════════════════════════════════════════════╗
-║         Gemini authentication failed — cannot start          ║
+║       agy authentication failed — cannot start               ║
 ╠══════════════════════════════════════════════════════════════╣
 ║                                                              ║
-║  Option 1 — OAuth (gemini auth):                             ║
+║  agy uses Google OAuth (no API-key env var). One-time setup: ║
 ║                                                              ║
-║    docker run -it \\                                          ║
-║      -v gemini_auth:/home/agent/.gemini \\                    ║
-║      --entrypoint gemini slim-gemini-agent auth login        ║
+║    docker compose run --rm -it --network=host \\              ║
+║      --entrypoint sh agent -c 'agy'                          ║
 ║                                                              ║
-║    Follow the prompts to authenticate.                       ║
-║    Then restart the agent (keep the -v flag).                ║
-║                                                              ║
-║  Option 2 — API key:                                         ║
-║                                                              ║
-║    Set GEMINI_API_KEY=... in your .env file.                 ║
-║    Get a key from https://aistudio.google.com/app/apikey     ║
+║  Follow the URL it prints to sign in with the Google         ║
+║  account that has Antigravity access. The OAuth token is     ║
+║  written to ~/.gemini/antigravity-cli/ inside the container, ║
+║  which the compose volume bind-mounts so it persists across  ║
+║  restarts. After completing the flow once, the agent can     ║
+║  start normally.                                             ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
 """

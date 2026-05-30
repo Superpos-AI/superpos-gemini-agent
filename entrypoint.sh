@@ -21,15 +21,16 @@ if [ -n "$GITHUB_TOKEN" ]; then
     gh auth setup-git 2>/dev/null || true
 fi
 
-# Materialize GEMINI_API_KEY into ~/.gemini/auth.json if the CLI needs it on
-# disk (some Gemini CLI versions don't read env vars on subsequent calls).
-mkdir -p "$HOME/.gemini"
-if [ -n "$GEMINI_API_KEY" ] && [ ! -f "$HOME/.gemini/auth.json" ]; then
-    cat > "$HOME/.gemini/auth.json" <<EOF
-{"api_key": "$GEMINI_API_KEY", "auth_mode": "apikey"}
-EOF
-    chmod 600 "$HOME/.gemini/auth.json"
-    echo "[entrypoint] Wrote $HOME/.gemini/auth.json from GEMINI_API_KEY env" >&2
+# Make sure the agy config directory exists before any module setup
+# runs (module_setup writes GEMINI.md and may also touch settings under
+# ~/.gemini). agy uses OAuth — there is no API-key env-var to materialise.
+# First-time OAuth setup is documented in README ("Authenticating agy").
+# The OAuth token lives under ~/.gemini/antigravity-cli/ which the
+# compose file bind-mounts so it persists across container restarts.
+mkdir -p "$HOME/.gemini/antigravity-cli"
+if [ -n "${GEMINI_API_KEY:-}" ]; then
+    echo "[entrypoint] WARNING: GEMINI_API_KEY is set but agy ignores it." >&2
+    echo "[entrypoint]          agy uses Google OAuth — see README for one-time setup." >&2
 fi
 
 # Run module setup: install deps, symlink scripts onto PATH, update GEMINI.md.
