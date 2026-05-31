@@ -30,3 +30,10 @@ where = ["src"]
 # uncomment this block to install from the local path instead of GitHub.
 # [tool.uv.sources]
 # superpos-agent-core = { path = "../superpos-agent-core" }
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["F"]
