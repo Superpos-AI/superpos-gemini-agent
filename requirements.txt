@@ -1,7 +1,7 @@
-# superpos-agent-core is the shared runtime — pulled from GitHub so this repo
-# can build standalone.  Pin to a specific commit/tag for reproducible
-# builds; @main is fine during active development.
-superpos-agent-core~=0.1
+# superpos-agent-core is the shared runtime — installed from PyPI so this repo
+# can build standalone.  Pinned to an exact version for reproducible
+# builds.
+superpos-agent-core==0.1.0
 
 # Transitive deps of superpos-agent-core are listed here for IDE/lockfile
 # clarity even though pip would pull them in via core's own pyproject.toml.
