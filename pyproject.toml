@@ -11,7 +11,7 @@ requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Superpos" }]
 dependencies = [
-    "superpos-agent-core @ git+https://github.com/Superpos-AI/superpos-agent-core.git@a84c88d103953bfec018a503efbdf7a3042d838e",
+    "superpos-agent-core~=0.1",
     "python-telegram-bot>=21.0",
     "httpx>=0.27.0",
     "pyyaml>=6.0",
