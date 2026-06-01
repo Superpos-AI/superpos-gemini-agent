@@ -27,7 +27,7 @@ dev = [
 where = ["src"]
 
 # Local dev convenience: if you have a sibling superpos-agent-core checkout,
-# uncomment this block to install from the local path instead of GitHub.
+# uncomment this block to install from a local path instead of PyPI.
 # [tool.uv.sources]
 # superpos-agent-core = { path = "../superpos-agent-core" }
 
