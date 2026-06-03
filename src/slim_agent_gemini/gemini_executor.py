@@ -217,6 +217,14 @@ class GeminiExecutor(Executor):
         except OSError:
             log.warning("Failed to remove history file %s", history_path, exc_info=True)
 
+    def model_info(self) -> dict[str, str]:
+        """Current model/effort, reported to Superpos on each heartbeat.
+
+        Reads live runtime state so mid-session ``/model`` / ``/effort``
+        switches surface on the dashboard.
+        """
+        return {"model": self._runtime.model, "effort": self._runtime.effort}
+
     def _history_path(self, chat_id: int | str) -> Path:
         return self._history_dir / f"{chat_id}.jsonl"
 
