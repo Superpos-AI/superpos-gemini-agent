@@ -12,8 +12,6 @@ import os
 import tempfile
 from unittest.mock import AsyncMock, patch, MagicMock
 
-import pytest
-
 from slim_agent_gemini import GeminiConfig, GeminiExecutor, GeminiRuntimeConfig
 from superpos_agent_core import ExecutionRequest
 
@@ -90,7 +88,7 @@ async def test_run_background_calls_report_progress_with_correct_args():
         with patch(
             "slim_agent_gemini.gemini_executor.report_progress",
             side_effect=fake_report_progress,
-        ) as mock_rp, patch(
+        ), patch(
             "asyncio.create_subprocess_exec",
             return_value=fake_process,
         ):
