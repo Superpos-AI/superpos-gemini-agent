@@ -218,12 +218,14 @@ class GeminiExecutor(Executor):
             log.warning("Failed to remove history file %s", history_path, exc_info=True)
 
     def model_info(self) -> dict[str, str]:
-        """Current model/effort, reported to Superpos on each heartbeat.
+        """Model info reported to Superpos on each heartbeat.
 
-        Reads live runtime state so mid-session ``/model`` / ``/effort``
-        switches surface on the dashboard.
+        ``agy`` manages model selection internally; the runtime ``/model``
+        and ``/effort`` knobs are accepted for command parity but the CLI
+        ignores them.  Report a fixed identifier so the dashboard does not
+        misrepresent the active model.
         """
-        return {"model": self._runtime.model, "effort": self._runtime.effort}
+        return {"model": "agy", "effort": "default"}
 
     def _history_path(self, chat_id: int | str) -> Path:
         return self._history_dir / f"{chat_id}.jsonl"
