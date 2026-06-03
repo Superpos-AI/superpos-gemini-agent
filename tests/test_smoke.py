@@ -3,14 +3,14 @@
 
 def test_package_importable():
     """The top-level package should be importable without side-effects."""
-    import slim_agent_gemini  # noqa: F811
+    import superpos_agent_gemini  # noqa: F811
 
-    assert slim_agent_gemini.__all__ is not None
+    assert superpos_agent_gemini.__all__ is not None
 
 
 def test_public_exports():
     """All declared public names should be importable."""
-    from slim_agent_gemini import GeminiConfig, GeminiExecutor, GeminiRuntimeConfig
+    from superpos_agent_gemini import GeminiConfig, GeminiExecutor, GeminiRuntimeConfig
 
     assert GeminiConfig is not None
     assert GeminiExecutor is not None
@@ -23,7 +23,7 @@ def test_model_info_returns_static_agy_values():
     import tempfile
     from unittest.mock import patch
 
-    from slim_agent_gemini import GeminiConfig, GeminiExecutor, GeminiRuntimeConfig
+    from superpos_agent_gemini import GeminiConfig, GeminiExecutor, GeminiRuntimeConfig
 
     with tempfile.TemporaryDirectory() as tmpdir:
         config = GeminiConfig(

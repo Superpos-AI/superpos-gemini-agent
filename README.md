@@ -1,4 +1,4 @@
-# Slim-Agent-Gemini
+# Superpos-Agent-Gemini
 
 Superpos slim agent backed by Google's **[Antigravity CLI (`agy`)](https://antigravity.google/cli)** — Google's current first-party CLI for the Gemini-3 family.
 
@@ -27,7 +27,7 @@ docker run -it --rm --network=host \
   --entrypoint sh slim-gemini-agent:local -c 'agy'
 ```
 
-`--entrypoint` only overrides ENTRYPOINT; the image's default CMD (`python3 -m slim_agent_gemini`) would otherwise be appended as positional args to `agy`. Routing through `sh -c 'agy'` runs bare `agy` (which drops into the interactive TUI + triggers OAuth) cleanly, with no leftover args.
+`--entrypoint` only overrides ENTRYPOINT; the image's default CMD (`python3 -m superpos_agent_gemini`) would otherwise be appended as positional args to `agy`. Routing through `sh -c 'agy'` runs bare `agy` (which drops into the interactive TUI + triggers OAuth) cleanly, with no leftover args.
 
 Two important flags:
 
@@ -46,7 +46,7 @@ docker compose up --build
 
 ```bash
 pip install -e .
-python -m slim_agent_gemini
+python -m superpos_agent_gemini
 ```
 
 If you're hacking on `superpos-agent-core` in a sibling directory and want
@@ -69,4 +69,4 @@ If you need the older `@google/gemini-cli`-based image for a specific reason, ch
 
 ## Status
 
-The agy CLI interface is moving — see `src/slim_agent_gemini/gemini_executor.py` for notes on which flags have been verified. If you hit unexpected output, run `agy --help` and adjust `_build_gemini_command()` accordingly.
+The agy CLI interface is moving — see `src/superpos_agent_gemini/gemini_executor.py` for notes on which flags have been verified. If you hit unexpected output, run `agy --help` and adjust `_build_gemini_command()` accordingly.

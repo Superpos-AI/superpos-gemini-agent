@@ -1,4 +1,4 @@
-"""Slim-Agent-Gemini entry point — wires GeminiExecutor into the core orchestrator."""
+"""Superpos-Agent-Gemini entry point — wires GeminiExecutor into the core orchestrator."""
 
 from __future__ import annotations
 

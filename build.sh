@@ -1,6 +1,6 @@
 #!/bin/bash
 # Build the slim-gemini-agent image locally.
-# Run from the Slim-Agent-Gemini/ directory.
+# Run from the Superpos-Agent-Gemini/ directory.
 
 set -e
 

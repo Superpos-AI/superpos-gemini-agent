@@ -55,8 +55,8 @@ RUN useradd -m -s /bin/bash -u 1001 agent && \
     mkdir -p /home/agent/.gemini && \
     chown -R agent:agent /workspace /home/agent/.gemini
 
-# Module is nested at /app/src/slim_agent_gemini/; PYTHONPATH must include
-# /app/src so that `python3 -m slim_agent_gemini` (the CMD below) resolves
+# Module is nested at /app/src/superpos_agent_gemini/; PYTHONPATH must include
+# /app/src so that `python3 -m superpos_agent_gemini` (the CMD below) resolves
 # the package. (Sister claude/codex agents put their code directly under
 # src/ so /app works for them; this repo's pyproject.toml-style nesting
 # needs /app/src.)
@@ -73,4 +73,4 @@ WORKDIR /workspace
 # a gemini run dies) — without it they accumulate as zombies because Python
 # doesn't reap reparented orphans.
 ENTRYPOINT ["/usr/bin/tini", "--", "/app/entrypoint.sh"]
-CMD ["python3", "-m", "slim_agent_gemini"]
+CMD ["python3", "-m", "superpos_agent_gemini"]

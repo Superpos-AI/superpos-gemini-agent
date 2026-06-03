@@ -1,4 +1,4 @@
-"""Slim-agent runtime backed by Google's Gemini CLI."""
+"""Superpos agent runtime backed by Google's Gemini CLI."""
 
 from .config import GeminiConfig
 from .gemini_executor import GeminiExecutor
