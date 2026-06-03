@@ -56,8 +56,6 @@ from asyncio.subprocess import PIPE
 from dataclasses import dataclass
 from pathlib import Path
 
-import httpx
-
 from superpos_agent_core import (
     Executor,
     ExecutionRequest,
