@@ -12,7 +12,7 @@ import os
 import tempfile
 from unittest.mock import AsyncMock, patch, MagicMock
 
-from slim_agent_gemini import GeminiConfig, GeminiExecutor, GeminiRuntimeConfig
+from superpos_agent_gemini import GeminiConfig, GeminiExecutor, GeminiRuntimeConfig
 from superpos_agent_core import ExecutionRequest
 
 
@@ -86,7 +86,7 @@ async def test_run_background_calls_report_progress_with_correct_args():
         fake_process.pid = 999
 
         with patch(
-            "slim_agent_gemini.gemini_executor.report_progress",
+            "superpos_agent_gemini.gemini_executor.report_progress",
             side_effect=fake_report_progress,
         ), patch(
             "asyncio.create_subprocess_exec",
@@ -145,7 +145,7 @@ async def test_run_background_cancels_inner_on_claim_expiry():
         fake_process.kill = MagicMock()
 
         with patch(
-            "slim_agent_gemini.gemini_executor.report_progress",
+            "superpos_agent_gemini.gemini_executor.report_progress",
             side_effect=fake_report_progress_expire,
         ), patch(
             "asyncio.create_subprocess_exec",
