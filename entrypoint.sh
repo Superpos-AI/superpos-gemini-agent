@@ -9,17 +9,20 @@ if [ -n "$GIT_USER_EMAIL" ]; then
     git config --global user.email "$GIT_USER_EMAIL"
 fi
 
-# Configure GitHub CLI auth if token provided.
+# Configure GitHub auth. Centralized in agent-core so every agent stays in sync.
+# Token precedence (static GITHUB_TOKEN is canonical and never expires):
+#   1. GITHUB_TOKEN set → gh auth login --with-token + gh auth setup-git.
+#   2. else a github_app service connection is discoverable → register a git
+#      credential helper that mints short-lived installation tokens from the
+#      Superpos broker on demand (no long-lived secret in the container).
+#   3. else → direct git/gh auth skipped; GitHub is still reachable through the
+#      Superpos proxy (the `superpos-github` module).
 #
-# We intentionally do NOT use `git config --global url.<token-URL>.insteadOf`
-# here — that pattern embeds the token into every clone's .git/config as the
-# origin remote, so `git remote -v` prints the token in cleartext.  Instead we
-# let `gh` register a credential helper; git fetches the token on demand and
-# never persists it into repo configs or remote URLs.
-if [ -n "$GITHUB_TOKEN" ]; then
-    echo "$GITHUB_TOKEN" | gh auth login --with-token 2>/dev/null || true
-    gh auth setup-git 2>/dev/null || true
-fi
+# We deliberately avoid `git config url.<token>.insteadOf`, which would bake the
+# token into every clone's .git/config and leak it via `git remote -v`; both the
+# gh credential helper and the broker helper hand tokens to git on demand only.
+python3 -m superpos_agent_core.github_auth setup \
+    || echo "Warning: GitHub auth setup failed (proxy access via superpos-github still works)"
 
 # Make sure the agy config directory exists before any module setup
 # runs (module_setup writes GEMINI.md and may also touch settings under
